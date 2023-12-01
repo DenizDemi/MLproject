@@ -1,0 +1,116 @@
+---
+title: "Practical Machine Learning Project"
+author: "Deniz D."
+date: "2023-12-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Overview
+This report is for the Practical Machine Learning course final project. 
+
+In this project we use data that was collected during exercise using wearable devices to predict how well the exercise was performed. 
+
+The training data for this project are available here: 
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this (now defunct) source: 
+http://groupware.les.inf.puc-rio.br/har
+
+The variable **classe** in the training set indicates the manner the exercise was performed in.
+
+## Loading Data
+First we load the necessary libraries, set the seed and read in the data. 
+```{r echo = TRUE, message=FALSE}
+library(caret)
+library(rattle)
+library(randomForest)
+set.seed(1234)
+```
+
+```{r echo=TRUE}
+traincsv <- read.csv("pml-training.csv", header = TRUE, na.strings=c("NA","#DIV/0!",""))
+testcsv <- read.csv("pml-testing.csv", header = TRUE, na.strings=c("NA","#DIV/0!",""))
+dim(traincsv)
+dim(testcsv)
+```
+
+## Clean Up
+There are many NA values in the training set. To clean up data, we start by removing variables with mostly (> %75) NA values. We also remove the first 7 columns which are not predictors.
+```{r echo=TRUE}
+traincsv <- traincsv[,colMeans(is.na(traincsv)) < .75] 
+traincsv <- traincsv[,-c(1:7)]  
+dim(traincsv)
+```
+
+## Random Sub Sampling
+We set aside some data for validation  (%70 for training, %30 for validation)
+```{r echo=TRUE}
+inTrain <- createDataPartition(y=traincsv$classe, p=0.7, list=FALSE)
+train <- traincsv[inTrain, ]
+valid <- traincsv[-inTrain, ]
+```
+
+## Prediction Models
+We are going to try three models, Decision Tree, Random Forest and Boosting
+
+## Decision Tree
+Fitting a decision tree model and plot. 
+```{r echo = TRUE}
+modTREE <- train(classe~., data = train, method= "rpart")
+fancyRpartPlot(modTREE$finalModel)
+```
+
+Prediction with decision tree.
+
+```{r echo = TRUE}
+predTREE <- predict(modTREE, valid)
+confTREE <- confusionMatrix(predTREE, as.factor(valid$classe))
+confTREE
+```
+Confusion matrix shows a low accuracy and the matrix itself shows high error.
+
+## Random Forest
+Next we are fitting a Random Forest model and predict based on that. 
+```{r echo=TRUE}
+modRF <- randomForest(as.factor(classe) ~ ., data = train, na.action = na.omit)
+predRF <- predict(modRF, valid)
+confRF <- confusionMatrix(predRF, as.factor(valid$classe))
+confRF
+```
+Accuracy here is very high and vast majority of data is on the diagonal (correct) with very few errors.
+
+## Boosting
+Here, we are fitting a Gradient Boosted Tree model and predict.
+```{r echo = TRUE}
+modGBM <- train(classe~., data=train, method = "gbm", trControl = trainControl(number=3), verbose = FALSE)
+predGBM = predict(modGBM, valid)
+confGBM <- confusionMatrix(predGBM, as.factor(valid$classe))
+confGBM
+```
+ 
+Here the accuracy is high, but not as high as Random Forest. Again vast majority of data is on the diagonal, showing correct prediction, with few errors. 
+
+## Conclusion and Predictions on the Test Set
+Random Forest has the best accuracy on the validation set, as can be seen below. 
+```{r echo = TRUE}
+rbind("Tree" = confTREE$overall[1], 
+      "Random Forest" = confRF$overall[1], 
+      "GBM" = confGBM$overall[1])
+```
+
+So we will continue with our random forest model to predict on the Test Set. 
+
+```{r echo = TRUE}
+plot(modRF)
+predict(modRF, testcsv)
+
+```
+
+
